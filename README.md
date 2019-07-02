@@ -8,7 +8,7 @@ The code itself was written by Andreas Monitzer <andreas@monitzer.com>.
 
 ## What does it do?
 
-It allows you to shrink and expand a polygon, like drawing an outline around it. It is also adding arcs to hard corners with a parameter to control the number of arc points to add, since it outputs polygons only.
+It allows you to shrink and expand a polygon, like drawing an outline around it. It is also adding arcs to sharp corners with a parameter to control the number of arc points to add, since it outputs polygons only.
 
 ## Dependencies
 
