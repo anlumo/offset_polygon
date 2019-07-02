@@ -1,8 +1,44 @@
+//! An implementation of the polygon offsetting algorithm using winding numbers
+//!
+//! Usage:
+//! ```
+//! use geo_types::{LineString, Coordinate};
+//! use offset_polygon::offset_polygon;
+//! let input = LineString(vec![
+//!     Coordinate {
+//!         x: 0.0,
+//!         y: 0.0,
+//!     },
+//!     Coordinate {
+//!         x: 1.0,
+//!         y: 0.0,
+//!     },
+//!     Coordinate {
+//!         x: 1.0,
+//!         y: 1.0,
+//!     },
+//!     Coordinate {
+//!         x: 0.0,
+//!         y: 0.0,
+//!     },
+//! ]);
+//! let result = offset_polygon(&input, -0.1, 10.0);
+//! // result: Ok([[
+//! //     Coordinate { x: 0.9, y: 0.1 },
+//! //     Coordinate { x: 0.9, y: 0.7585786437626904 },
+//! //     Coordinate { x: 0.24142135623730954, y: 0.1 },
+//! //     Coordinate { x: 0.9, y: 0.1 }
+//! // ]])
+//! ```
+//!
+//! Note that polygons have to be closed (the last coordinate has to be the same as the first one), otherwise you will get some strange results.
+
 use geo_types::{LineString, Coordinate};
 use num_traits::{Num, NumCast, float::{Float, FloatConst}, FromPrimitive};
 use std::ops::{AddAssign, SubAssign};
 
 mod error;
+pub use error::CombinatorialExplosionError;
 mod intersect;
 use intersect::intersect;
 
@@ -33,7 +69,7 @@ fn is_left<N>(p0: Coordinate<N>, p1: Coordinate<N>, p2: Coordinate<N>) -> N
 
 // based on http://geomalgorithms.com/a03-_inclusion.html
 fn winding_number<N>(pt: Coordinate<N>, polygon: &Vec<Coordinate<N>>) -> isize
-        where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + FromPrimitive + AddAssign + SubAssign + std::fmt::Debug {
+        where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + FromPrimitive + AddAssign + SubAssign {
     let mut wn = 0;
     let epsilon = N::from_f32(-0.00001).unwrap(); // oh my
     for idx in 0..polygon.len()-1 {
@@ -56,8 +92,19 @@ fn winding_number<N>(pt: Coordinate<N>, polygon: &Vec<Coordinate<N>>) -> isize
     wn
 }
 
-pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Result<Vec<LineString<N>>, error::CombinatorialExplosionError>
-        where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + FromPrimitive + AddAssign + SubAssign + std::fmt::Debug {
+/// The core function of this crate. Expands or shrinks the given polygon by the offset. It support `f32` and `f64` for its calculations and input/output.
+///
+/// # Arguments
+///
+/// * `polygon` - A polygon to shrink or expand. It has to be closed (the last coordinate has to be the same as the first coordinate)
+/// * `offset` - A positive number expands the polygon, a negative number shrinks it.
+/// * `arcdetail` - Defines how many points should be added in a sharp corner. This number is the number of vertices inserted if it's a full circle. The actual number inserted depends on the angle of the corner.
+///
+/// Returns a vector of polygons (if the polygon is shrunk more than its thinnest section, multiple polygons will be generated).
+/// The error occurs when there are too many intersections during the operation and should never happen. It's there to avoid infinite loops
+/// (which the author did experience with certain edge cases).
+pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Result<Vec<LineString<N>>, CombinatorialExplosionError>
+        where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + FromPrimitive + AddAssign + SubAssign {
     if polygon.0.len() == 0 {
         return Ok(vec![LineString(Vec::new())]);
     }
@@ -292,7 +339,7 @@ mod tests {
         let result = offset_polygon(&input, -0.1, 10.0).unwrap();
         assert!(result.len() == 1, "Triangle offsetting should result in one polygon");
         let first = result.first().unwrap();
-        assert!(first.0.iter().zip(vec![Coordinate { x: 0.9, y: 0.1 }, Coordinate { x: 0.9, y: 0.7585786437626904 }, Coordinate { x: 0.24142135623730954, y: 0.1 }]).all(|(p0, p1)| (p0.x - p1.x).abs() < f64::epsilon() && (p0.y - p1.y).abs() < f64::epsilon()), "Incorrect triangle offsetting");
+        assert!(first.0.iter().zip(vec![Coordinate { x: 0.9, y: 0.1 }, Coordinate { x: 0.9, y: 0.7585786437626904 }, Coordinate { x: 0.24142135623730954, y: 0.1 }, Coordinate { x: 0.9, y: 0.1 }]).all(|(p0, p1)| (p0.x - p1.x).abs() < f64::epsilon() && (p0.y - p1.y).abs() < f64::epsilon()), "Incorrect triangle offsetting");
     }
     #[test]
     fn rectangle() {
