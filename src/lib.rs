@@ -32,23 +32,22 @@ fn is_left<N>(p0: Coordinate<N>, p1: Coordinate<N>, p2: Coordinate<N>) -> N
 }
 
 // based on http://geomalgorithms.com/a03-_inclusion.html
-fn winding_number<N>(pt: Coordinate<N>, polygon: &LineString<N>) -> isize
+fn winding_number<N>(pt: Coordinate<N>, polygon: &Vec<Coordinate<N>>) -> isize
         where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + FromPrimitive + AddAssign + SubAssign + std::fmt::Debug {
     let mut wn = 0;
-    for idx in 0..polygon.0.len()-1 {
-        let p0 = polygon.0[idx];
-        let p1 = polygon.0[idx+1];
+    let epsilon = N::from_f32(-0.00001).unwrap(); // oh my
+    for idx in 0..polygon.len()-1 {
+        let p0 = polygon[idx];
+        let p1 = polygon[idx+1];
         if p0.y <= pt.y { // start y <= point.y
             if p1.y > pt.y { // an upwards crossing
-                if is_left(p0, p1, pt) >= -N::epsilon() { // point left of edge
-                // if is_left(p0, p1, pt) >= N::zero() { // point left of edge
+                if is_left(p0, p1, pt) >= epsilon { // point left of edge
                     wn += 1; // have a valid up intersect
                 }
             }
         } else { // start y > point.y
             if p1.y <= pt.y { // a downward crossing
-                if is_left(p0, p1, pt) < -N::epsilon() { // point right of edge
-                // if is_left(p0, p1, pt) < N::zero() { // point right of edge
+                if is_left(p0, p1, pt) < epsilon { // point right of edge
                     wn -= 1;
                 }
             }
@@ -88,8 +87,6 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
             })
         }
     }).flatten().collect();
-
-    println!("lines [{}] {:?}", lines.len(), lines);
 
     let mut connected = Vec::new();
 
@@ -138,7 +135,7 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
         }
     }
 
-    println!("connected [{}] {:?}", connected.len(), connected);
+    connected.push(connected[0]);
 
     // find intersections and add them to the indices array
     let mut intersections: Vec<Coordinate<N>> = Vec::new();
@@ -148,7 +145,7 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
             Index::Connected(idx) => connected[idx],
         }
     };
-    let mut indices: Vec<Index> = (0..connected.len()).map(|idx| Index::Connected(idx)).collect();
+    let mut indices: Vec<Index> = (0..(connected.len()-1)).map(|idx| Index::Connected(idx)).collect();
     let mut indices_idx = 0;
     while indices_idx < indices.len()-1 {
         let mut p0 = lookup(indices[indices_idx], &intersections, &connected);
@@ -183,13 +180,6 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
         }
         indices_idx += 1;
     }
-
-    println!("indices [{}] {:?}", indices.len(), indices.iter().map(|idx| {
-        match idx {
-            Index::Connected(i) => *i as isize,
-            Index::Intersection(i) => -(*i as isize)-1,
-        }
-    }).collect::<Vec<isize>>());
 
     // find all regions in this polygon
     let mut regions = Vec::new();
@@ -227,18 +217,15 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
         }
     }
 
-    println!("regions [{}] {:?}", regions.len(), regions);
-
     connected = indices.into_iter().map(|idx| lookup(idx, &intersections, &connected)).collect();
     connected.push(connected[0]); // line string has to be closed
 
-    let connected = LineString(connected);
-
+    let epsilon = N::from_f32(0.01).unwrap();
     Ok(regions.into_iter().filter(|region| {
         for idx in 0..(region.len()-1) {
             let p0 = region[idx];
             let p1 = region[idx+1];
-            if (p1.y - p0.y).abs() > N::epsilon() {
+            if (p1.y - p0.y).abs() > epsilon {
                 return winding_number(Coordinate { // center point
                     x: (p0.x + p1.x) * N::from_f32(0.5).unwrap(),
                     y: (p0.y + p1.y) * N::from_f32(0.5).unwrap(),
@@ -331,6 +318,9 @@ mod tests {
         assert!(first.0.iter().zip(vec![
             Coordinate { x: 490.0, y: 206.0 }, Coordinate { x: 1260.0, y: 206.0 }, Coordinate { x: 1261.2360679774997, y: 206.19577393481939 }, Coordinate { x: 1262.3511410091699, y: 206.7639320225002 }, Coordinate { x: 1263.2360679774997, y: 207.64885899083012 }, Coordinate { x: 1263.8042260651805, y: 208.7639320225002 }, Coordinate { x: 1264.0, y: 210.0 }, Coordinate { x: 1264.0, y: 433.2142857142857 }, Coordinate { x: 1264.0, y: 538.2142857142858 }, Coordinate { x: 1264.0, y: 1190.0 }, Coordinate { x: 1263.8042260651805, y: 1191.2360679774997 }, Coordinate { x: 1263.2360679774997, y: 1192.3511410091699 }, Coordinate { x: 1262.3511410091699, y: 1193.2360679774997 }, Coordinate { x: 1261.2360679774997, y: 1193.8042260651805 }, Coordinate { x: 1260.0, y: 1194.0 }, Coordinate { x: 490.0, y: 1194.0 }, Coordinate { x: 489.8539107738989, y: 1193.997331352042 }, Coordinate { x: 484.1189254223364, y: 1193.7877366254795 }, Coordinate { x: 483.79240923739854, y: 1193.7623876658276 }, Coordinate { x: 472.6286633572716, y: 1192.4340719309644 }, Coordinate { x: 472.235917415522, y: 1192.3673637973461 }, Coordinate { x: 461.4393323325142, y: 1189.974999295393 }, Coordinate { x: 461.05620284228667, y: 1189.8698955044583 }, Coordinate { x: 450.6264352336441, y: 1186.4433742031888 }, Coordinate { x: 450.263066528529, y: 1186.3040698943623 }, Coordinate { x: 440.19977307149776, y: 1181.8732837615498 }, Coordinate { x: 439.8641392595229, y: 1181.7063135028359 }, Coordinate { x: 430.1669766313491, y: 1176.3011545062539 }, Coordinate { x: 429.8641767978316, y: 1176.1142550602183 }, Coordinate { x: 420.5328016757613, y: 1169.7646151676402 }, Coordinate { x: 420.2650159801387, y: 1169.5655648308352 }, Coordinate { x: 411.299085041418, y: 1162.3013360100344 }, Coordinate { x: 411.06603817092304, y: 1162.0970706733294 }, Coordinate { x: 402.46520809279804, y: 1153.9481448920794 }, Coordinate { x: 402.26487638813836, y: 1153.7442711164458 }, Coordinate { x: 394.02880384785516, y: 1144.74054034252 }, Coordinate { x: 393.8581313386792, y: 1144.541206666713 }, Coordinate { x: 385.9864730134839, y: 1134.7125628678848 }, Coordinate { x: 385.8419576995105, y: 1134.5205725682135 }, Coordinate { x: 378.33437026664916, y: 1123.8969077122565 }, Coordinate { x: 378.2124753965426, y: 1123.7139512928131 }, Coordinate { x: 371.0686155332613, y: 1112.3251573475006 }, Coordinate { x: 370.96601961331993, y: 1112.152075028524 }, Coordinate { x: 364.18554399686485, y: 1100.0280439616295 }, Coordinate { x: 364.09926771076067, y: 1099.865066721847 }, Coordinate { x: 357.68183301837786, y: 1087.0356905011438 }, Coordinate { x: 357.60928364250293, y: 1086.882637913942 }, Coordinate { x: 351.5545465514385, y: 1073.3778085072038 }, Coordinate { x: 351.49351299097424, y: 1073.2342396823021 }, Coordinate { x: 345.80113017847424, y: 1059.0838490573021 }, Coordinate { x: 345.7497520513173, y: 1058.9491718322975 }, Coordinate { x: 340.4193801946278, y: 1044.1831119568092 }, Coordinate { x: 340.37610593921517, y: 1044.0566585373924 }, Coordinate { x: 335.40740171558235, y: 1028.7048213791893 }, Coordinate { x: 335.3709444854647, y: 1028.585898674682 }, Coordinate { x: 330.7635645721346, y: 1012.6781762015376 }, Coordinate { x: 330.7328605582804, y: 1012.5660978933767 }, Coordinate { x: 326.48646163249913, y: 996.1323820730642 }, Coordinate { x: 326.460632920877, y: 996.0264879266665 }, Coordinate { x: 322.5748716598907, y: 979.0966707269595 }, Coordinate { x: 322.5531942790427, y: 978.9963372393836 }, Coordinate { x: 319.0277273600974, y: 961.6003106280555 }, Coordinate { x: 319.0096044039095, y: 961.5049559439516 }, Coordinate { x: 315.8440885042513, y: 943.6726118887758 }, Coordinate { x: 315.8290278535101, y: 943.581697031538 }, Coordinate { x: 313.0231196503851, y: 925.342927500288 }, Coordinate { x: 313.0107156855551, y: 925.2559553174486 }, Coordinate { x: 310.5640718562094, y: 906.6406522778979 }, Coordinate { x: 310.55399054475373, y: 906.5571650392243 }, Coordinate { x: 308.4662677664334, y: 887.5952204591462 }, Coordinate { x: 308.45823455756454, y: 887.5147967251163 }, Coordinate { x: 306.7290895075157, y: 868.2361025722843 }, Coordinate { x: 306.7220079614456, y: 868.145623432413 }, Coordinate { x: 304.7551576806839, y: 838.7293178904208 }, Coordinate { x: 304.74838222858386, y: 838.5931636601482 }, Coordinate { x: 303.43743862506824, y: 798.493981531242 }, Coordinate { x: 303.4353192111048, y: 798.3518002410353 }, Coordinate { x: 303.5525067111048, y: 757.5236752410353 }, Coordinate { x: 303.5552750088276, y: 757.3859234096066 }, Coordinate { x: 305.097847030312, y: 716.0679912807003 }, Coordinate { x: 305.1052003538899, y: 715.9326156124139 }, Coordinate { x: 308.0704103148274, y: 674.3640120967889 }, Coordinate { x: 308.08233259815506, y: 674.2291013681985 }, Coordinate { x: 312.46743391651444, y: 632.6489622080422 }, Coordinate { x: 312.4841762830664, y: 632.5126790253505 }, Coordinate { x: 318.2864223768164, y: 591.1601399628505 }, Coordinate { x: 318.3064450906345, y: 591.0324635909847 }, Coordinate { x: 323.63061424957004, y: 560.3314671920589 }, Coordinate { x: 323.64597436945553, y: 560.2481466930744 }, Coordinate { x: 327.6073810772192, y: 539.9667669933674 }, Coordinate { x: 327.6223513493434, y: 539.8937460274299 }, Coordinate { x: 331.9364992985621, y: 519.8037802071174 }, Coordinate { x: 331.9533066012378, y: 519.7290092651388 }, Coordinate { x: 336.6198524691577, y: 499.8603492919942 }, Coordinate { x: 336.63868702806184, y: 499.78357413422617 }, Coordinate { x: 341.657287491929, y: 480.16611197602305 }, Coordinate { x: 341.6783717367669, y: 480.087069936184 }, Coordinate { x: 347.04868347382745, y: 460.7506975606957 }, Coordinate { x: 347.07227651264924, y: 460.66911714782316 }, Coordinate { x: 352.79395620014924, y: 441.64372652282316 }, Coordinate { x: 352.82035906975545, y: 441.5593275250436 }, Coordinate { x: 358.893063384941, y: 422.87481061830533 }, Coordinate { x: 358.9226251549729, y: 422.7873048954861 }, Coordinate { x: 365.34601077509006, y: 404.473553674783 }, Coordinate { x: 365.3791355731061, y: 404.3826468917677 }, Coordinate { x: 372.15285917540103, y: 386.4695533248732 }, Coordinate { x: 372.1900141745596, y: 386.37494795941774 }, Coordinate { x: 379.31373243627837, y: 368.89240401410524 }, Coordinate { x: 379.35545679752823, y: 368.7938040766715 }, Coordinate { x: 386.8288263959169, y: 351.7717017207145 }, Coordinate { x: 386.87574107038193, y: 351.6688197488204 }, Coordinate { x: 394.6984186826866, y: 335.1370509499923 }, Coordinate { x: 394.75123683983315, y: 335.02961798704195 }, Coordinate { x: 402.92287914329995, y: 319.01807471311616 }, Coordinate { x: 402.9824167731871, y: 318.90585414427727 }, Coordinate { x: 411.5026804450621, y: 303.44442836302727 }, Coordinate { x: 411.56986635888444, y: 303.3272346425319 }, Coordinate { x: 420.43840807641374, y: 288.4458183217311 }, Coordinate { x: 420.5142920642168, y: 288.32354175388247 }, Coordinate { x: 429.7307685046465, y: 274.05202686130434 }, Coordinate { x: 429.8165257684177, y: 273.9246656319559 }, Coordinate { x: 439.3805936089939, y: 260.2929441353739 }, Coordinate { x: 439.4775227518404, y: 260.1606446338726 }, Coordinate { x: 449.38883866980916, y: 247.19860850106014 }, Coordinate { x: 449.4983495026084, y: 247.0617144769549 }, Coordinate { x: 459.7565701752158, y: 234.79925567568537 }, Coordinate { x: 459.88015649306186, y: 234.65836573839456 }, Coordinate { x: 470.48493859755405, y: 223.12537623644144 }, Coordinate { x: 470.62413010847314, y: 222.98140739211266 }, Coordinate { x: 481.5751303220962, y: 212.20777915724938 }, Coordinate { x: 481.70406267063237, y: 212.08643212504802 }, Coordinate { x: 487.32369157688237, y: 207.02722802348552 }, Coordinate { x: 488.373316495723, y: 206.34570105534414 }, Coordinate { x: 489.5821725297326, y: 206.02188232890353 }, Coordinate { x: 490.0, y: 206.0 },
         ]).all(|(p0, p1)| (p0.x - p1.x).abs() < f64::epsilon() && (p0.y - p1.y).abs() < f64::epsilon()), "Incorrect offsetting for complex polygon");
+
+        let result = offset_polygon(&input, 40.0, 20.0).unwrap();
+        assert!(result.len() == 1, "Complex input should result in one polygon");
     }
     #[test]
     fn complex_contract() {

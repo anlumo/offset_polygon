@@ -45,7 +45,7 @@ pub fn intersect<N>(start: Coordinate<N>, end: Coordinate<N>, line: &LineString<
             continue;
         }
         let t = cross_product(q_p, s) / rxs;
-        if (!exclude_points && (t.is_sign_negative() || t > N::from(1.0).unwrap())) || (exclude_points && (t < N::epsilon() || t > N::from(1.0).unwrap() - N::epsilon())) {
+        if (!exclude_points && (t.is_sign_negative() || t > N::from(1.0).unwrap())) || (exclude_points && (t < N::from(0.00001).unwrap() || t > N::from(0.999999).unwrap())) {
             continue;
         }
         intersection_u = u;
