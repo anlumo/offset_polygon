@@ -1,5 +1,7 @@
 [package]
 name = "offset-polygon"
+description = "An implementation of the polygon offsetting algorithm using winding numbers"
+readme = "README.md"
 version = "0.1.0"
 authors = ["Andreas Monitzer <andreas@monitzer.com>"]
 repository = "https://github.com/anlumo/offset_polygon"
