@@ -105,12 +105,12 @@ fn winding_number<N>(pt: Coord<N>, polygon: &Vec<Coord<N>>) -> isize
 /// (which the author did experience with certain edge cases).
 pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Result<Vec<LineString<N>>, CombinatorialExplosionError>
         where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + FromPrimitive + AddAssign + SubAssign + std::fmt::Debug {
-    if polygon.0.len() == 0 {
+    if polygon.0.is_empty() {
         return Ok(vec![LineString(Vec::new())]);
     }
     let arcstep = N::from_f32(2.0).unwrap() * N::PI() / arcdetail;
 
-    let lines: Vec<Segment<N>> = (0..(polygon.0.len()-1)).map(|idx| {
+    let lines: Vec<Segment<N>> = (0..(polygon.0.len()-1)).filter_map(|idx| {
         let (p0, p1) = (polygon.0[idx], polygon.0[idx+1]);
         let len = ((p0.x - p1.x)*(p0.x - p1.x) + (p0.y - p1.y)*(p0.y - p1.y)).sqrt();
         if len < N::epsilon() {
@@ -133,7 +133,7 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
                 normal,
             })
         }
-    }).flatten().collect();
+    }).collect();
 
     let mut connected = Vec::new();
 
@@ -192,7 +192,7 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
             Index::Connected(idx) => connected[idx],
         }
     };
-    let mut indices: Vec<Index> = (0..(connected.len()-1)).map(|idx| Index::Connected(idx)).collect();
+    let mut indices: Vec<Index> = (0..(connected.len()-1)).map(Index::Connected).collect();
     let mut indices_idx = 0;
     while indices_idx < indices.len()-1 {
         let mut p0 = lookup(indices[indices_idx], &intersections, &connected);
@@ -231,7 +231,7 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
     // find all regions in this polygon
     let mut regions = Vec::new();
     let mut remaining: Vec<usize> = (0..indices.len()).collect();
-    while remaining.len() > 0 {
+    while !remaining.is_empty() {
         let mut indices_idx = remaining[0];
 
         let mut current_region = Vec::new();
@@ -258,7 +258,7 @@ pub fn offset_polygon<N>(polygon: &LineString<N>, offset: N, arcdetail: N) -> Re
                 break;
             }
         }
-        if current_region.len() > 0 {
+        if !current_region.is_empty() {
             current_region.push(current_region[0]); // line string has to be closed
             regions.push(current_region);
         }
