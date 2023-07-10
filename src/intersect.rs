@@ -1,26 +1,26 @@
-use geo_types::{LineString, Coordinate};
+use geo_types::{LineString, Coord};
 use num_traits::{Num, NumCast, float::{Float, FloatConst}};
 
-pub struct IntersectionResult<N: Num + Copy + NumCast + PartialOrd> {
+pub struct IntersectionResult<N: Num + Copy + NumCast + PartialOrd + std::fmt::Debug> {
     pub u: N,
     pub t: N,
-    pub point: Coordinate<N>,
+    pub point: Coord<N>,
     pub index: usize,
 }
 
-fn cross_product<N>(a: Coordinate<N>, b: Coordinate<N>) -> N
-        where N: Num + Copy + NumCast + PartialOrd {
+fn cross_product<N>(a: Coord<N>, b: Coord<N>) -> N
+        where N: Num + Copy + NumCast + PartialOrd + std::fmt::Debug {
     a.x * b.y - a.y * b.x
 }
 
 // https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect/565282#565282
-pub fn intersect<N>(start: Coordinate<N>, end: Coordinate<N>, line: &LineString<N>, exclude_points: bool) -> Option<IntersectionResult<N>>
-        where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst {
+pub fn intersect<N>(start: Coord<N>, end: Coord<N>, line: &LineString<N>, exclude_points: bool) -> Option<IntersectionResult<N>>
+        where N: Num + Copy + NumCast + PartialOrd + Float + FloatConst + std::fmt::Debug {
     let mut intersection_u = N::from(1.0).unwrap();
     let mut intersection_t = None;
     let mut intersection_point = None;
     let mut intersection_index = None;
-    let s = Coordinate {
+    let s = Coord {
         x: end.x - start.x,
         y: end.y - start.y,
     };
@@ -28,7 +28,7 @@ pub fn intersect<N>(start: Coordinate<N>, end: Coordinate<N>, line: &LineString<
     for idx in 0..(line.0.len()-1) {
         let p0 = line.0[idx];
         let p1 = line.0[idx+1];
-        let r = Coordinate {
+        let r = Coord {
             x: p1.x - p0.x,
             y: p1.y - p0.y,
         };
@@ -36,7 +36,7 @@ pub fn intersect<N>(start: Coordinate<N>, end: Coordinate<N>, line: &LineString<
         if rxs.abs() < N::epsilon() {
             continue;
         }
-        let q_p = Coordinate {
+        let q_p = Coord {
             x: start.x - p0.x,
             y: start.y - p0.y,
         };
@@ -50,7 +50,7 @@ pub fn intersect<N>(start: Coordinate<N>, end: Coordinate<N>, line: &LineString<
         }
         intersection_u = u;
         intersection_t = Some(t);
-        intersection_point = Some(Coordinate {
+        intersection_point = Some(Coord {
             x: start.x + u * s.x,
             y: start.y + u * s.y,
         });
